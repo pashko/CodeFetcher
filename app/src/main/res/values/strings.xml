@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">CodeFetcher</string>
+    <string name="unknown_error">An unknown error has occurred, please try again</string>
+    <string name="response_code_label">Response Code:\u0020</string>
+    <string name="fetch_code_prompt">Press the button to fetch</string>
+    <string name="times_fetched_label">Times fetched: %s</string>
+    <string name="fetch_code_button">Fetch Code</string>
+    <string name="loading_text">Loading, please wait...</string>
+</resources>
