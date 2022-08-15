@@ -1,29 +1,21 @@
 package com.stepup.codefetcher
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.rxjava3.RxDataStore
-import io.reactivex.rxjava3.core.Completable
-import io.reactivex.rxjava3.core.Observable
-import io.reactivex.rxjava3.core.Single
-import io.reactivex.rxjava3.disposables.Disposable
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class CounterStorage @Inject constructor(
-    private val dataStore: RxDataStore<Preferences>
+    private val dataStore: DataStore<Preferences>
 ) {
 
-    val currentValue: Observable<Int> = dataStore.data()
-        .map { it[CounterKey] ?: 0 }.toObservable()
+    val currentValue: Flow<Int> = dataStore.data.map { it.counter }
 
-    fun increment(): Completable = Completable.fromSingle(
-        dataStore.updateDataAsync {
-            Single.just(it.toMutablePreferences().apply { counter++ })
-        }
-    )
+    suspend fun increment() = dataStore.edit { it.counter++ }
 }
 
 private val CounterKey = intPreferencesKey("counter")

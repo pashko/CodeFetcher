@@ -101,7 +101,7 @@ class FetchCodeViewModelTest {
         every { storage.increment() } returns Completable.complete()
         every { storage.currentValue } returns Single.just(0).toObservable()
         val viewModel = FetchCodeViewModel(service, storage)
-        val error = viewModel.errors
+        val error = viewModel.events
             .doOnSubscribe { viewModel.fetchCode() }
             .timeout(1, TimeUnit.SECONDS)
             .blockingFirst()

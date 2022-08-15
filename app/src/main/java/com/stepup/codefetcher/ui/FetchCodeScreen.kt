@@ -3,7 +3,14 @@ package com.stepup.codefetcher.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material.Button
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.LocalContentColor
@@ -15,9 +22,9 @@ import androidx.compose.material.Text
 import androidx.compose.material.TopAppBar
 import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rxjava3.subscribeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,23 +38,53 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.stepup.codefetcher.FetchCodeViewModel
+import com.stepup.codefetcher.FetchCodeViewModel.Failure
+import com.stepup.codefetcher.FetchCodeViewModel.State
+import com.stepup.codefetcher.FetchCodeViewModel2
 import com.stepup.codefetcher.R
-import com.stepup.codefetcher.Subscribe
-import com.stepup.codefetcher.ToolbarTitle
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.reactive.asFlow
 
 @Composable
 fun FetchCodeScreen(
     modifier: Modifier = Modifier,
     viewModel: FetchCodeViewModel = viewModel()
 ) {
+    FetchCodeScreen(
+        state = viewModel.state.subscribeAsState(initial = null).value ?: return,
+        errors = viewModel.events.asFlow(),
+        fetchNew = viewModel::fetchCode,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun FetchCodeScreen2(
+    modifier: Modifier = Modifier,
+    viewModel: FetchCodeViewModel2 = viewModel()
+) {
+    FetchCodeScreen(
+        state = viewModel.state.collectAsState(initial = null).value ?: return,
+        errors = viewModel.events,
+        fetchNew = viewModel::fetchCode,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun FetchCodeScreen(
+    state: State,
+    errors: Flow<Failure>,
+    fetchNew: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val snackbarHostState = remember { SnackbarHostState() }
     val unknownErrorMessage = stringResource(R.string.unknown_error)
-    val scope = rememberCoroutineScope()
-    Subscribe(viewModel.errors) {
-        scope.launch { snackbarHostState.showSnackbar(it.message ?: unknownErrorMessage) }
+    LaunchedEffect(errors) {
+        errors.collect {
+            snackbarHostState.showSnackbar(it.message ?: unknownErrorMessage)
+        }
     }
-    val state by viewModel.state.subscribeAsState(initial = null)
     Scaffold(
         modifier = modifier,
         topBar = { TopAppBar(title = { Text("Fetch Code", Modifier.fillMaxWidth().wrapContentWidth()) }) },
@@ -57,7 +94,7 @@ fun FetchCodeScreen(
             code = state?.code,
             counter = state?.counter,
             isLoading = state?.isLoading ?: true,
-            fetchNew = { viewModel.fetchCode() },
+            fetchNew = fetchNew,
             modifier = Modifier.padding(contentPadding).fillMaxSize()
         )
     }

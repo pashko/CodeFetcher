@@ -1,58 +1,57 @@
 package com.stepup.codefetcher
 
-import androidx.lifecycle.ViewModel
+import com.stepup.codefetcher.FetchCodeViewModel.Failure
+import com.stepup.codefetcher.FetchCodeViewModel.State
+import com.stepup.codefetcher.domain.rx.Container
+import com.stepup.codefetcher.domain.rx.FeatureViewModel
+import com.stepup.codefetcher.domain.rx.doOnLoading
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.reactivex.rxjava3.core.Maybe
-import io.reactivex.rxjava3.core.Observable
-import io.reactivex.rxjava3.disposables.CompositeDisposable
-import io.reactivex.rxjava3.kotlin.plusAssign
+import io.reactivex.rxjava3.kotlin.subscribeBy
 import io.reactivex.rxjava3.schedulers.Schedulers
-import io.reactivex.rxjava3.subjects.BehaviorSubject
-import io.reactivex.rxjava3.subjects.PublishSubject
+import kotlinx.coroutines.rx3.asObservable
+import kotlinx.coroutines.rx3.rxCompletable
 import javax.inject.Inject
 
 @HiltViewModel
 class FetchCodeViewModel @Inject constructor(
     private val service: CodeService,
     private val counterStorage: CounterStorage,
-): ViewModel() {
+): FeatureViewModel(), Container<State, Failure> {
 
-    private val disposable = CompositeDisposable()
+    private val container = Container<_, Failure>(State())
 
-    private val mutableCode = BehaviorSubject.createDefault(Maybe.empty<String>())
-    private val mutableIsLoading = BehaviorSubject.createDefault(false)
+    override val state = container.state
+    override val events = container.events
 
-    val state: Observable<State> = Observable.combineLatest(
-        mutableCode,
-        mutableIsLoading,
-        counterStorage.currentValue
-    ) { code, isLoading, counter -> State(code.blockingGet(), isLoading, counter) }
+    init {
+        container.perform {
+            counterStorage.currentValue.asObservable().subscribe {
+                updateState { copy(counter = it) }
+            }
+        }
+    }
 
-    private val mutableErrors = PublishSubject.create<Failure>()
-    val errors: Observable<Failure> = mutableErrors
-
-    fun fetchCode() {
-        disposable += service.getResponseCode()
+    fun fetchCode() = container.perform {
+        // we don't want increment() to be cancelled so not adding to the disposable
+        rxCompletable { counterStorage.increment() }.subscribe()
+        service.getResponseCode()
             .subscribeOn(Schedulers.io())
-            .doOnSubscribe { mutableIsLoading.onNext(true) }
-            .doOnTerminate { mutableIsLoading.onNext(false) }
-            // we don't want increment() to be cancelled so not adding to the disposable
-            .doOnTerminate { counterStorage.increment().subscribe() }
-            .map { Maybe.just(it.response_code) }
-            .subscribe(mutableCode::onNext, ::handleError)
+            .doOnLoading { updateState { copy(isLoading = it) } }
+            .subscribeBy(
+                onSuccess = { updateState { copy(code = it.response_code) } },
+                onError = ::handleError
+            )
     }
 
     private fun handleError(error: Throwable) {
-        mutableErrors.onNext(Failure(error.errorMessage))
+        container.emitEvent(Failure(error.errorMessage))
     }
-
-    override fun onCleared() = disposable.dispose()
 
     data class Failure(val message: String? = null)
 
     data class State(
         val code: String? = null,
-        val isLoading: Boolean,
-        val counter: Int
+        val isLoading: Boolean = false,
+        val counter: Int = 0
     )
 }
